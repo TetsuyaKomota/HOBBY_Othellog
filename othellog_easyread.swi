@@ -1,0 +1,214 @@
+/* ------------------------------------------------------------------ */
+/* 基本事実 */
+changeTurn(o, x).
+changeTurn(x, o).
+
+exit(bye, _).
+exit(_, bye).
+
+adder(X, Y, AX, AY, NX, NY) :- NX is X+AX, NY is Y+AY.
+    
+/* ------------------------------------------------------------------ */
+/* 初期状態 */
+init(Field) :-
+    initPanel(0, 0, Field1),
+    putState(Field1, 3, 3, o, Field2),
+    putState(Field2, 3, 4, x, Field3),
+    putState(Field3, 4, 3, x, Field4),
+    putState(Field4, 4, 4, o, Field).
+
+initPanel(7, 7, [panel(7, 7, ' ')]):- !.
+
+initPanel(7, Y, [panel(7, Y, ' ')|Field]) :- !,
+    adder(0, Y, 0, 1, 0, Y1),
+    initPanel(0, Y1, Field).
+
+initPanel(X, Y, [panel(X, Y, ' ')|Field]) :-
+    adder(X, 0, 1, 0, X1, 0),
+    initPanel(X1, Y, Field).
+
+/* ------------------------------------------------------------------ */
+/* 指定したマスの状態を取得する */
+getState([panel(X, Y, FS)|_], X, Y, FS) :- !.
+
+getState([], _, _, n):- !.
+
+getState([_|T], X, Y, FS) :- getState(T, X, Y, FS).
+
+/* ------------------------------------------------------------------ */
+/* 指定したマスが空きマスなら，コマを置く */
+put(CurrentField, panel(X, Y, S), NextField) :-
+    getState(CurrentField, X, Y, ' '),
+    putState(CurrentField, X, Y, S, Next1),
+    /* 置いたことによって反転が起こる */
+    reverse(Next1, X, Y, S, NextField).
+
+putState([], _, _, _, []) :- !.
+
+putState([panel(X, Y, _)|T], X, Y, S, [panel(X, Y, S)|T]) :- !.
+
+putState([H|T], X, Y, S, [H|R]) :- putState(T, X, Y, S, R).
+
+/* ------------------------------------------------------------------ */
+/* フィールドのマスをひっくり返す */
+reverse(Field, X, Y, S, NextField) :-
+    checkReverseLine(Field, X, Y, S, -1, -1, Next1),
+    checkReverseLine(Next1, X, Y, S, -1,  0, Next2),
+    checkReverseLine(Next2, X, Y, S, -1,  1, Next3),
+    checkReverseLine(Next3, X, Y, S,  0, -1, Next4),
+    checkReverseLine(Next4, X, Y, S,  0,  1, Next5),
+    checkReverseLine(Next5, X, Y, S,  1, -1, Next6),
+    checkReverseLine(Next6, X, Y, S,  1,  0, Next7),
+    checkReverseLine(Next7, X, Y, S,  1,  1, NextField).
+
+checkReverseLine(Field, X, Y, S, VX, VY, NextField) :-
+    adder(X, Y, VX, VY, X1, Y1),
+    getState(Field, X1, Y1, S1),
+    (
+        S=S1, !,
+        VX1 is VX * -1,
+        VY1 is VY * -1,
+        reverseLine(Field, X1, Y1, S, VX1, VY1, NextField);
+        changeTurn(S, S2), S1=S2, !,
+        checkReverseLine(Field, X1, Y1, S, VX, VY, NextField)
+    ).
+
+/* 反転チェックの失敗，普通に盤面を返す */
+checkReverseLine(Field, _, _, _, _, _, Field).
+
+/* 反転の最後．次のコマが同色なら，何もせず帰る */
+reverseLine(Field, X, Y, S, VX, VY, Field) :-
+    adder(X, Y, VX, VY, X1, Y1),
+    getState(Field, X1, Y1, S1), S=S1, !.
+
+/* 反転．次のコマが異色なら，色を反転して再帰 */
+reverseLine(Field, X, Y, S, VX, VY, NextField) :-
+    adder(X, Y, VX, VY, X1, Y1),
+    changeTurn(S, S1),
+    getState(Field, X1, Y1, S2), S1=S2, !, 
+    putState(Field, X1, Y1, S, Next1),
+    reverseLine(Next1, X1, Y1, S, VX, VY, NextField).
+
+/* ------------------------------------------------------------------ */
+/* 盤面状態を描画 */
+show(Field) :-
+    write(' --------'), nl, write('|'),
+    showPanel(0, 0, Field),
+    write(' --------'), nl.
+
+showPanel(X, Y, Field) :-
+    getState(Field, X, Y, FS),
+    write(FS),
+    showNext(X, Y, Field).
+
+showNext(7, 7, Field) :- !, 
+    write('|'), nl.
+
+showNext(7, Y, Field) :- !, 
+    write('|'), nl, write('|'),
+    adder(0, Y, 0, 1, 0, Y1),
+    showPanel(0, Y1, Field).
+
+showNext(X, Y, Field) :-
+    adder(X, 0, 1, 0, X1, 0),
+    showPanel(X1, Y, Field).
+     
+/* ------------------------------------------------------------------ */
+/* メイン文 */
+start :- init(F), main(F, o).
+
+startDebug :- see('debug.txt'), start.
+
+main(Field, Turn) :- 
+    show(Field),
+    finish(Field);
+    (
+        pass(Field, Turn), !,
+        changeTurn(Turn, NextTurn),
+        (
+            (
+                pass(Field, NextTurn), !,
+                finishize(Field, Full),
+                finish(Full)
+            );
+            (
+                write(Turn), write(' cannot put.'), nl,
+                main(Field, NextTurn)
+            )
+        )
+    );
+    write('Put '), write(Turn), nl,
+    write('Position X? >'), read(X), nl,
+    write('Position Y? >'), read(Y), nl,
+    (
+        exit(X, Y), !;
+        (
+            continue(Field, X, Y, Turn, NextField, NextTurn), !;
+            put(Field, panel(X, Y, Turn), NextField),
+            changeTurn(Turn, NextTurn)
+        ),
+        main(NextField, NextTurn)
+    ).
+
+/* おけないところを宣言した場合はもう一度指定しなおし */
+continue(Field, X, Y, Turn, Field, Turn) :-
+    getState(Field, X, Y, S),
+    (
+        not(S=' ');
+        not(reversable(Field, X, Y, Turn))
+    ).
+
+/* そのマスにコマ S がおけるか判定する */
+reversable(Field, X, Y, S) :-
+    member(VX, [-1, 0, 1]),
+    member(VY, [-1, 0, 1]),
+    not((VX=0, VY=0)),
+    reversableLine(Field, X, Y, S, VX, VY, f).
+
+reversableLine(Field, X, Y, S, VX, VY, Flg) :-
+    adder(X, Y, VX, VY, X1, Y1),
+    getState(Field, X1, Y1, S1), 
+    (
+        S=S1, Flg=t;
+        changeTurn(S, S1),
+        reversableLine(Field, X1, Y1, S, VX, VY, t)
+    ).
+
+/* パス判定 */
+pass(Field, Turn) :- not(passPanel(Field, Field, Turn)).
+
+/* 空きマスかつ反転するマス（おけるマス）があれば受理 */
+passPanel(Field, [panel(X, Y, ' ')|T], Turn) :-
+    reversable(Field, X, Y, Turn), !.
+
+/* ないなら次のマスに再帰 */
+passPanel(Field, [H|T], Turn) :-
+    passPanel(Field, T, Turn).
+
+/* 終了判定 */
+finish(Field) :- finishCount(Field, 0, 0).
+
+finishCount([], O, X) :- !,
+    O > X, write('winner is o'), nl;
+    X > O, write('winner is x'), nl;
+    O =:= X, write('draw game'), nl.
+
+finishCount([panel(_, _, o)|T], O, X) :-
+    O1 is O+1,
+    finishCount(T, O1, X).
+
+finishCount([panel(_, _, x)|T], O, X) :-
+    adder(X, 0, 1, 0, X1, 0),
+    finishCount(T, O, X1).
+
+finishCount([panel(_, _, n)|T], O, X) :-
+    finishCount(T, O, X).
+
+/* 両方パスになった際に空きマスをnで埋めて finish 判定に引っかかるようにする */
+finishize([], []) :- !.
+
+finishize([panel(X, Y, ' ')|T], [panel(X, Y, n)|R]) :- !,
+    finishize(T, R).
+
+finishize([panel(X, Y, S)|T], [panel(X, Y, S)|R]) :-
+    finishize(T, R).
