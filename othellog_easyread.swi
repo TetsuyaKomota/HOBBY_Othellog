@@ -121,42 +121,25 @@ startDebug :- see('debug.txt'), start.
 
 main(Field, Turn) :- 
     show(Field),
-    finish(Field);
-    (
-        pass(Field, Turn), !,
-        changeTurn(Turn, NextTurn),
-        (
-            (
-                pass(Field, NextTurn), !,
-                finishize(Field, Full),
-                finish(Full)
-            );
-            (
-                write(Turn), write(' cannot put.'), nl,
-                main(Field, NextTurn)
-            )
-        )
-    );
+    passorfinish(Field, Turn), !;
     write('Put '), write(Turn), nl,
     write('Position X? >'), read(X), nl,
     write('Position Y? >'), read(Y), nl,
-    (
-        exit(X, Y), !;
-        (
-            continue(Field, X, Y, Turn, NextField, NextTurn), !;
-            put(Field, panel(X, Y, Turn), NextField),
-            changeTurn(Turn, NextTurn)
-        ),
-        main(NextField, NextTurn)
-    ).
+    continue(Field, X, Y, Turn, NextField, NextTurn),
+    main(NextField, NextTurn).
 
-/* おけないところを宣言した場合はもう一度指定しなおし */
-continue(Field, X, Y, Turn, Field, Turn) :-
-    getState(Field, X, Y, S),
-    (
-        not(S=' ');
-        not(reversable(Field, X, Y, Turn))
-    ).
+/* bye なら終了, 置けないなら指定しなおし，置けるなら置く */
+continue(_, X, Y, _, _, _) :- exit(X, Y), !.
+
+continue(Field, X, Y, Turn, Field, Turn) :- 
+    getState(Field, X, Y, S), not(S=' '), !.
+
+continue(Field, X, Y, Turn, Field, Turn) :- 
+    not(reversable(Field, X, Y, Turn)), !.
+
+continue(Field, X, Y, Turn, NextField, NextTurn) :-
+    put(Field, panel(X, Y, Turn), NextField),
+    changeTurn(Turn, NextTurn).
 
 /* そのマスにコマ S がおけるか判定する */
 reversable(Field, X, Y, S) :-
@@ -173,6 +156,20 @@ reversableLine(Field, X, Y, S, VX, VY, Flg) :-
         changeTurn(S, S1),
         reversableLine(Field, X1, Y1, S, VX, VY, t)
     ).
+
+/* スタンバイフェイズ．終了またはパスであるか判定する */
+passorfinish(Field, Turn) :- 
+    changeTurn(Turn, NextTurn),
+    pass(Field, Turn),
+    pass(Field, NextTurn), !, 
+    finishize(Field, Full),
+    finish(Full).
+
+passorfinish(Field, Turn) :-
+    changeTurn(Turn, NextTurn),
+    pass(Field, Turn),
+    write(Turn), write(' cannot put.'), nl,
+    main(Field, NextTurn).
 
 /* パス判定 */
 pass(Field, Turn) :- not(passPanel(Field, Field, Turn)).
@@ -204,7 +201,7 @@ finishCount([panel(_, _, x)|T], O, X) :-
 finishCount([panel(_, _, n)|T], O, X) :-
     finishCount(T, O, X).
 
-/* 両方パスになった際に空きマスをnで埋めて finish 判定に引っかかるようにする */
+/* 両方パスになった際に空きマスをn埋め finish 判定用 */
 finishize([], []) :- !.
 
 finishize([panel(X, Y, ' ')|T], [panel(X, Y, n)|R]) :- !,
