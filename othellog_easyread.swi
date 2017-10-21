@@ -2,10 +2,10 @@
 /* 基本事実 */
 changeTurn(o, x).
 changeTurn(x, o).
-
 exit(bye, _).
 exit(_, bye).
 
+/* 2要素の同時和．汎用 */
 adder(X, Y, AX, AY, NX, NY) :- NX is X+AX, NY is Y+AY.
     
 /* ------------------------------------------------------------------ */
@@ -63,15 +63,15 @@ reverse(Field, X, Y, S, NextField) :-
 
 checkReverseLine(Field, X, Y, S, VX, VY, NextField) :-
     adder(X, Y, VX, VY, X1, Y1),
-    getState(Field, X1, Y1, S1),
-    (
-        S=S1, !,
-        VX1 is VX * -1,
-        VY1 is VY * -1,
-        reverseLine(Field, X1, Y1, S, VX1, VY1, NextField);
-        changeTurn(S, S2), S1=S2, !,
-        checkReverseLine(Field, X1, Y1, S, VX, VY, NextField)
-    ).
+    getState(Field, X1, Y1, S), !, 
+    VX1 is VX * -1,
+    VY1 is VY * -1,
+    reverseLine(Field, X1, Y1, S, VX1, VY1, NextField).
+
+checkReverseLine(Field, X, Y, S, VX, VY, NextField) :-
+    adder(X, Y, VX, VY, X1, Y1),
+    changeTurn(S, S1), getState(Field, X1, Y1, S1), !,
+    checkReverseLine(Field, X1, Y1, S, VX, VY, NextField).
 
 /* 反転チェックの失敗，普通に盤面を返す */
 checkReverseLine(Field, _, _, _, _, _, Field).
@@ -148,14 +148,14 @@ reversable(Field, X, Y, S) :-
     not((VX=0, VY=0)),
     reversableLine(Field, X, Y, S, VX, VY, f).
 
+reversableLine(Field, X, Y, S, VX, VY, t) :-
+    adder(X, Y, VX, VY, X1, Y1),
+    getState(Field, X1, Y1, S), !.
+
 reversableLine(Field, X, Y, S, VX, VY, Flg) :-
     adder(X, Y, VX, VY, X1, Y1),
-    getState(Field, X1, Y1, S1), 
-    (
-        S=S1, Flg=t;
-        changeTurn(S, S1),
-        reversableLine(Field, X1, Y1, S, VX, VY, t)
-    ).
+    changeTurn(S, S1), getState(Field, X1, Y1, S1), 
+    reversableLine(Field, X1, Y1, S, VX, VY, t).
 
 /* スタンバイフェイズ．終了またはパスであるか判定する */
 passorfinish(Field, Turn) :- 
